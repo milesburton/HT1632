@@ -439,15 +439,90 @@ void MatrixDisplay::preCommand()
 
 void MatrixDisplay::bitBlast(uint8_t pin, uint8_t data)
 {
-    // TODO: Only supports 328
-    if(pin < 14)
-    {
-        fWriteA(pin, data);
+#if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
+    switch (pin) {
+        case 0: PORTE &= ~0x01;
+                PORTE |= (data & 0x01);
+                break;
+        case 1: PORTE &= ~0x02;
+                PORTE |= (data & 0x01) << 1;
+                break;
+        case 2: PORTE &= ~0x10;
+                PORTE |= (data & 0x01) << 4;
+                break;
+        case 3: PORTE &= ~0x20;
+                PORTE |= (data & 0x01) << 5;
+                break;
+        case 4: PORTG &= ~0x20;
+                PORTG |= (data & 0x01) << 5;
+                break;
+        case 5: PORTE &= ~0x08;
+                PORTE |= (data & 0x01) << 3;
+                break;
+        case 6: PORTH &= ~0x08;
+                PORTH |= (data & 0x01) << 3;
+                break;
+        case 7: PORTH &= ~0x10;
+                PORTH |= (data & 0x01) << 4;
+                break;
+        case 8: PORTH &= ~0x20;
+                PORTH |= (data & 0x01) << 5;
+                break;
+        case 9: PORTH &= ~0x40;
+                PORTH |= (data & 0x01) << 6;
+                break;
+        case 10: PORTB &= ~0x10;
+                PORTB |= (data & 0x01) << 4;
+                break;
+        case 11: PORTB &= ~0x20;
+                PORTB |= (data & 0x01) << 5;
+                break;
+        case 12: PORTB &= ~0x40;
+                PORTB |= (data & 0x01) << 6;
+                break;
+        case 13: PORTB &= ~0x80;
+                PORTB |= (data & 0x01) << 7;
+                break;
+        case 14: PORTJ &= ~0x02;
+                PORTJ |= (data & 0x01) << 1;
+                break;
+        case 15: PORTJ &= ~0x01;
+                PORTJ |= (data & 0x01);
+                break;
+        case 16: PORTH &= ~0x02;
+                PORTH |= (data & 0x01) << 1;
+                break;
+        case 17: PORTH &= ~0x01;
+                PORTH |= (data & 0x01);
+                break;
+        case 18: PORTD &= ~0x08;
+                PORTD |= (data & 0x01) << 3;
+                break;
+        case 19: PORTD &= ~0x04;
+                PORTD |= (data & 0x01) << 2;
+                break;
+        case 20: PORTD &= ~0x02;
+                PORTD |= (data & 0x01) << 1;
+                break;
+        case 21: PORTD &= ~0x01;
+                PORTD |= (data & 0x01);
+                break;
+        /*
+        If you want to use the pins 22 - 53 lookup the PORTx in the Arduino Mega pinmap and insert a matching case statement
+        */
     }
-    else
-    {
-        fWriteB(pin, data);
+#else
+    if (pin < 8) {
+        PORTD &= ~(1 << pin );
+        PORTD |= (data & 0x01) << pin; 
+    } else if (pin < 14) {
+        PORTB &= ~(1 << (pin - 8) );
+        PORTB |= (data & 0x01) << (pin - 8); 
+    } else {
+        PORTC &= ~(1 << (pin - 14) );
+        PORTC |= (data & 0x01) << (pin - 14); 
     }
+#endif
 }
 
 
