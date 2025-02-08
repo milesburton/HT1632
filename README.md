@@ -2,7 +2,6 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Arduino Library](https://img.shields.io/badge/Arduino-Library-blue.svg)](https://www.arduino.cc/reference/en/libraries/)
-[![Build Status](https://img.shields.io/github/workflow/status/milesburton/HT1632/CI)](https://github.com/milesburton/HT1632/actions)
 [![GitHub Stars](https://img.shields.io/github/stars/milesburton/HT1632.svg)](https://github.com/milesburton/HT1632/stargazers)
 [![GitHub Issues](https://img.shields.io/github/issues/milesburton/HT1632.svg)](https://github.com/milesburton/HT1632/issues)
 
