@@ -150,12 +150,6 @@ void loop() {
    - Verify power supply capacity
    - Check for loose connections
 
-## 🏢 Used By
-
-- Company A - Digital signage solutions
-- Project B - Smart home displays
-- Company C - Industrial monitoring
-
 ## 📜 Licence
 
 This project is licensed under the MIT Licence. See [https://opensource.org/licenses/MIT](https://opensource.org/licenses/MIT) for details.
