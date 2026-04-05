@@ -5,7 +5,6 @@ Control Sure Electronics LED Matrix displays with ease! Perfect for scrolling me
 ##  Quick Start
 
 ```cpp
-// This is all you need to get started!
 #include <HT1632.h>
 
 HT1632LEDMatrix display(8, 9, 10, 11); // data, wr, cs, clk
