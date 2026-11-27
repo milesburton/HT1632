@@ -1,5 +1,8 @@
 name: Trusted PR Auto-Approve and Merge
 
+# Merges pull requests from the owner and Dependabot, but only after every
+# other check on the commit has passed. Failing, missing or unfinished checks
+# leave the pull request open. Drafts and forks are ignored.
 on:
   pull_request_target:
     types: [opened, reopened, synchronize, ready_for_review]
@@ -7,25 +10,83 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  checks: read
+  statuses: read
+  actions: read
+
+concurrency:
+  group: trusted-automerge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   trusted-automerge:
     if: >-
-      github.event.pull_request.user.login == 'milesburton' ||
-      github.event.pull_request.user.login == 'dependabot[bot]' ||
-      github.event.pull_request.user.login == 'app/dependabot'
+      !github.event.pull_request.draft &&
+      github.event.pull_request.base.ref == github.event.repository.default_branch &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event.pull_request.user.login == 'milesburton' ||
+       github.event.pull_request.user.login == 'dependabot[bot]')
     runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      PR_URL: ${{ github.event.pull_request.html_url }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
-      - name: Auto approve trusted PR
-        uses: hmarr/auto-approve-action@v4
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Attempt admin merge (bypass when permitted)
+      - name: Wait for all other checks to pass
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_URL: ${{ github.event.pull_request.html_url }}
+          OWN_WORKFLOW: ${{ github.workflow }}
         run: |
-          gh pr merge "$PR_URL" --squash --delete-branch --admin || \
-          gh pr merge "$PR_URL" --merge --delete-branch --admin || \
-          gh pr merge "$PR_URL" --auto --squash --delete-branch
+          set -euo pipefail
+          poll="${POLL_SECONDS:-30}"
+          settle="${SETTLE_SECONDS:-60}"
+          no_checks="${NO_CHECKS_SECONDS:-600}"
+          limit="${TIMEOUT_SECONDS:-1800}"
+          start=$(date +%s)
+          previous=""
+          while true; do
+            elapsed=$(( $(date +%s) - start ))
+            pr=$(gh pr view "$PR_URL" --json headRefOid,statusCheckRollup)
+            if [ "$(jq -r .headRefOid <<<"$pr")" != "$HEAD_SHA" ]; then
+              echo "::error::The branch moved on. Not merging this commit."; exit 1
+            fi
+            # Every check on this commit except this workflow's own, as "name state".
+            checks=$(jq -r --arg own "$OWN_WORKFLOW" '
+              [ .statusCheckRollup[]
+                | select((.workflowName // "") != $own)
+                | if .__typename == "StatusContext" then
+                    { name: .context, state: .state }
+                  else
+                    { name: .name, state: (if .status == "COMPLETED" then .conclusion else "PENDING" end) }
+                  end ]
+              | sort_by(.name)[] | "\(.state) \(.name)"' <<<"$pr")
+            total=$(grep -c . <<<"$checks" || true)
+            pending=$(grep -c -E '^(PENDING|EXPECTED) ' <<<"$checks" || true)
+            passed=$(grep -c -E '^SUCCESS ' <<<"$checks" || true)
+            failed=$(grep -c -v -E '^(SUCCESS|NEUTRAL|SKIPPED|PENDING|EXPECTED) |^$' <<<"$checks" || true)
+            echo "checks=$total passed=$passed pending=$pending failed=$failed after ${elapsed}s"
+            if [ "$total" -gt 0 ] && [ "$pending" -eq 0 ] && [ "$elapsed" -ge "$settle" ] && [ "$checks" = "$previous" ]; then
+              if [ "$failed" -eq 0 ] && [ "$passed" -gt 0 ]; then
+                echo "All checks passed."; exit 0
+              fi
+              echo "$checks"
+              echo "::error::Checks did not pass. Not merging."; exit 1
+            fi
+            if [ "$total" -eq 0 ] && [ "$elapsed" -ge "$no_checks" ]; then
+              echo "::error::No checks ran on this commit. Not merging."; exit 1
+            fi
+            if [ "$elapsed" -ge "$limit" ]; then
+              echo "::error::Timed out waiting for checks. Not merging."; exit 1
+            fi
+            previous="$checks"
+            sleep "$poll"
+          done
+
+      - name: Approve
+        run: gh pr review "$PR_URL" --approve || echo "::warning::Could not approve. The merge will fail if a review is required."
+
+      - name: Merge the commit that was checked
+        run: |
+          gh pr merge "$PR_URL" --squash --delete-branch --match-head-commit "$HEAD_SHA" ||
+            gh pr merge "$PR_URL" --merge --delete-branch --match-head-commit "$HEAD_SHA"
